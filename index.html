@@ -83,7 +83,7 @@ for(const task of available){const btn=document.createElement('button');btn.text
 }
 async function openStudentTask(task){
 const root=document.getElementById('taskquestions');root.replaceChildren();const title=document.createElement('h3');title.textContent=task.title;root.append(title);
-const link=document.createElement('a');link.href='./repositorio.html';link.target='_blank';link.rel='noopener noreferrer';link.textContent='Consultar documentos visuales originales';root.append(link);
+const visualNote=document.createElement('p');visualNote.textContent='El recurso visual de esta actividad se incorporará aquí cuando esté preparado sin soluciones visibles.';root.append(visualNote);
 const {data,error}=await S.rpc('student_assignment_questions',{p_assignment_id:task.id});if(error){root.append(document.createTextNode(error.message));return;}
 if(!data?.length){root.append(document.createTextNode('Esta actividad no tiene preguntas disponibles.'));return;}
 const {data:existing}=await S.from('attempts').select('question_id').eq('assignment_id',task.id);for(const q of data){const count=(existing||[]).filter(x=>x.question_id===q.question_id).length;const box=document.createElement('div');box.className='item';box.style.marginTop='16px';const h=document.createElement('h4');h.textContent='Pregunta '+q.ordinal;box.append(h);const prompt=document.createElement('p');prompt.textContent=q.prompt?.text||'Enunciado pendiente';box.append(prompt);
