@@ -12,4 +12,24 @@ $('requestTeacher').onclick=async()=>{const r=await S.from('teacher_requests').i
 $('createclass').onsubmit=async e=>{e.preventDefault();const f=form(e),r=await S.from('classrooms').insert({teacher_id:u.id,name:f.get('name'),school_year:f.get('year')||null});say(r.error||'Clase creada');await teacherLoad()};
 $('logout').onclick=async()=>{await S.auth.signOut();recover=false;await refresh()};
 S.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY')recover=true;setTimeout(refresh,0)});refresh();
+</script><section id="adminpanel" class="card hidden"><h2>Administración · Validación de docentes</h2><p>Solicitudes pendientes de profesorado. Comprueba la identidad antes de aprobar.</p><div id="adminrequests"></div><button id="adminreload">Actualizar solicitudes</button></section><script>
+const adminClient=window.supabase.createClient('https://ytkfbrxktpepctdkymum.supabase.co','sb_publishable_Zqax6vN0ZsdXRrtxzlW9ug_N8t-gtiR',{auth:{storageKey:'sb-ytkfbrxktpepctdkymum-auth-token'}});
+async function adminLoad(){
+const {data:{user}}=await adminClient.auth.getUser();
+if(!user){document.getElementById('adminpanel').classList.add('hidden');return;}
+const {data:allowed,error:ae}=await adminClient.rpc('is_platform_admin');
+if(ae||!allowed){document.getElementById('adminpanel').classList.add('hidden');return;}
+document.getElementById('adminpanel').classList.remove('hidden');
+const {data:req,error}=await adminClient.from('teacher_requests').select('user_id,requested_at').order('requested_at',{ascending:true});
+const root=document.getElementById('adminrequests');root.replaceChildren();
+if(error){root.textContent=error.message;return;}
+if(!req.length){root.textContent='No hay solicitudes docentes pendientes.';return;}
+const {data:people}=await adminClient.from('profiles').select('id,username,display_name').in('id',req.map(x=>x.user_id));
+for(const x of req){const person=(people||[]).find(p=>p.id===x.user_id),line=document.createElement('div');line.className='item';
+const title=document.createElement('p');title.textContent=(person?.display_name||'Usuario')+' · @'+(person?.username||x.user_id)+' · '+new Date(x.requested_at).toLocaleDateString('es-ES');line.append(title);
+for(const [label,approve] of [['Aprobar docente',true],['Rechazar',false]]){const b=document.createElement('button');b.textContent=label;b.style.marginRight='8px';b.onclick=async()=>{if(!confirm((approve?'¿Aprobar':'¿Rechazar')+' la solicitud de '+(person?.username||x.user_id)+'?'))return;b.disabled=true;const {error:re}=await adminClient.rpc('review_teacher_request',{p_user_id:x.user_id,p_approve:approve});if(re)alert(re.message);await adminLoad();};line.append(b);}root.append(line);}
+}
+document.getElementById('adminreload').onclick=adminLoad;
+adminClient.auth.onAuthStateChange(()=>setTimeout(adminLoad,0));
+setTimeout(adminLoad,350);
 </script></html>
