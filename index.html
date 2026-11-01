@@ -70,4 +70,25 @@ S.auth.onAuthStateChange(()=>setTimeout(loadImportProgress,0));setTimeout(loadIm
 async function showVisualRepository(){const {data:{user}}=await S.auth.getUser();if(!user){document.getElementById('visualrepo').classList.add('hidden');return;}const {data:profile}=await S.from('profiles').select('role').eq('id',user.id).maybeSingle();document.getElementById('visualrepo').classList.toggle('hidden',profile?.role!=='teacher');}
 document.getElementById('viewrepo').onclick=()=>document.getElementById('repoframewrap').classList.toggle('hidden');
 S.auth.onAuthStateChange(()=>setTimeout(showVisualRepository,0));setTimeout(showVisualRepository,500);
+</script><section id="studenttasks" class="card hidden"><h2>Mis actividades PISA</h2><p>Solo se muestran tareas publicadas de clases donde se haya aprobado tu incorporación.</p><button id="reloadtasks">Actualizar actividades</button><div id="tasklist"></div><div id="taskquestions"></div></section><script>
+async function loadStudentTasks(){
+const {data:{user}}=await S.auth.getUser();if(!user){document.getElementById('studenttasks').classList.add('hidden');return;}
+const {data:p}=await S.from('profiles').select('role').eq('id',user.id).maybeSingle();if(p?.role!=='student'){document.getElementById('studenttasks').classList.add('hidden');return;}
+document.getElementById('studenttasks').classList.remove('hidden');const root=document.getElementById('tasklist');root.replaceChildren();
+const {data:enrollments,error:ee}=await S.from('enrollments').select('classroom_id').eq('student_id',user.id).eq('status','approved');if(ee){root.textContent=ee.message;return;}
+if(!enrollments?.length){root.textContent='Todavía no estás incorporado a ninguna clase.';return;}
+const {data:tasks,error}=await S.from('assignments').select('id,title,activity_id,due_at,max_attempts').in('classroom_id',enrollments.map(x=>x.classroom_id));if(error){root.textContent=error.message;return;}
+const {data:activities}=await S.from('activities').select('id,title').eq('published',true);const visible=new Set((activities||[]).map(x=>x.id));const available=(tasks||[]).filter(x=>visible.has(x.activity_id));if(!available.length){root.textContent='No hay actividades publicadas asignadas a tus clases.';return;}
+for(const task of available){const btn=document.createElement('button');btn.textContent=task.title+' · Abrir';btn.style.display='block';btn.onclick=()=>openStudentTask(task);root.append(btn);}
+}
+async function openStudentTask(task){
+const root=document.getElementById('taskquestions');root.replaceChildren();const title=document.createElement('h3');title.textContent=task.title;root.append(title);
+const link=document.createElement('a');link.href='./repositorio.html';link.target='_blank';link.rel='noopener noreferrer';link.textContent='Consultar documentos visuales originales';root.append(link);
+const {data,error}=await S.rpc('student_assignment_questions',{p_assignment_id:task.id});if(error){root.append(document.createTextNode(error.message));return;}
+if(!data?.length){root.append(document.createTextNode('Esta actividad no tiene preguntas disponibles.'));return;}
+const {data:existing}=await S.from('attempts').select('question_id').eq('assignment_id',task.id);for(const q of data){const count=(existing||[]).filter(x=>x.question_id===q.question_id).length;const box=document.createElement('div');box.className='item';box.style.marginTop='16px';const h=document.createElement('h4');h.textContent='Pregunta '+q.ordinal;box.append(h);const prompt=document.createElement('p');prompt.textContent=q.prompt?.text||'Enunciado pendiente';box.append(prompt);
+const remaining=task.max_attempts==null?null:Math.max(0,task.max_attempts-count);const note=document.createElement('p');note.textContent='Intentos realizados: '+count+(remaining===null?'':' · Restantes: '+remaining);box.append(note);
+const form=document.createElement('form');const answer=document.createElement('textarea');answer.required=true;answer.maxLength=5000;answer.rows=3;answer.placeholder='Escribe tu respuesta';answer.style.width='100%';form.append(answer);const btn=document.createElement('button');btn.textContent='Entregar respuesta';btn.disabled=remaining===0||!!(task.due_at&&new Date(task.due_at)<new Date());form.append(btn);form.onsubmit=async e=>{e.preventDefault();btn.disabled=true;const {error:err}=await S.rpc('submit_pisa_answer',{p_assignment_id:task.id,p_question_id:q.question_id,p_answer:answer.value});if(err){alert(err.message);btn.disabled=false;}else{alert('Respuesta registrada. Pendiente de corrección docente.');await openStudentTask(task);}};box.append(form);root.append(box);}
+}
+document.getElementById('reloadtasks').onclick=loadStudentTasks;S.auth.onAuthStateChange(()=>setTimeout(loadStudentTasks,0));setTimeout(loadStudentTasks,600);
 </script></html>
