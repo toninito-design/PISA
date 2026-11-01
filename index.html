@@ -56,4 +56,14 @@ for(const a of rows){const d=document.createElement('div');d.className='item';d.
 }
 document.getElementById('assignactivity').onsubmit=async e=>{e.preventDefault();const data={classroom_id:document.getElementById('assignclass').value,activity_id:document.getElementById('assignitem').value,title:document.getElementById('assigntitle').value.trim(),max_attempts:Number(document.getElementById('assignattempts').value),feedback_mode:'after_submission'};if(!data.classroom_id||!data.activity_id)return alert('Selecciona clase y actividad.');const {error}=await S.from('assignments').insert(data);if(error)alert(error.message);else{alert('Actividad asignada a la clase.');await loadActivityPanel();}};
 S.auth.onAuthStateChange(()=>setTimeout(loadActivityPanel,0));setTimeout(loadActivityPanel,400);
+</script><section id="importprogress" class="card hidden"><h2>Estado de importación del repositorio PISA</h2><p>Los ejercicios siguen en revisión y no están disponibles para el alumnado. La tabla indica los enunciados preliminares cargados, no preguntas listas para autocorrección.</p><div id="importrows"></div><button id="refreshimport">Actualizar estado</button></section><script>
+async function loadImportProgress(){
+const {data:{user}}=await S.auth.getUser();if(!user){document.getElementById('importprogress').classList.add('hidden');return;}
+const {data:role}=await S.from('profiles').select('role').eq('id',user.id).maybeSingle();if(role?.role!=='teacher'){document.getElementById('importprogress').classList.add('hidden');return;}
+document.getElementById('importprogress').classList.remove('hidden');
+const {data,error}=await S.rpc('teacher_catalog_progress'),root=document.getElementById('importrows');root.replaceChildren();if(error){root.textContent=error.message;return;}
+for(const x of data||[]){const row=document.createElement('div');row.className='item';row.textContent=x.category+' · '+x.activities+' actividades catalogadas · '+x.draft_questions+' preguntas en borrador · '+x.published_activities+' publicadas';root.append(row);}
+}
+document.getElementById('refreshimport').onclick=loadImportProgress;
+S.auth.onAuthStateChange(()=>setTimeout(loadImportProgress,0));setTimeout(loadImportProgress,500);
 </script></html>
