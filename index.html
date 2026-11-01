@@ -202,4 +202,28 @@ document.getElementById('refreshtalent').onclick=refreshPisaTalent;
 document.getElementById('progressstudent').addEventListener('change',drawPisaTalent);
 const originalRenderPisaMatrix=renderPisaMatrix;renderPisaMatrix=function(){originalRenderPisaMatrix();drawPisaTalent();};
 S.auth.onAuthStateChange(()=>setTimeout(refreshPisaTalent,0));setTimeout(refreshPisaTalent,1600);
+</script><section id="pisaintervention" class="card hidden"><h2>Orientaciones de intervención docente</h2><p>Propuestas basadas exclusivamente en los cruces de contenido y proceso con al menos cinco respuestas corregidas de dos tareas diferentes. Las actividades sugeridas se muestran por bloque de contenido; no se presupone que evalúen un proceso concreto sin clasificar sus preguntas.</p><button id="refreshintervention">Actualizar orientaciones</button><div id="interventioncontent"></div></section><script>
+let interventionPublished=[];
+async function loadPisaIntervention(){
+const {data:{user}}=await S.auth.getUser(),section=document.getElementById('pisaintervention');if(!user){section.classList.add('hidden');return;}
+const {data:profile}=await S.from('profiles').select('role').eq('id',user.id).maybeSingle();section.classList.toggle('hidden',profile?.role!=='teacher');if(profile?.role!=='teacher')return;
+const {data,error}=await S.from('activities').select('id,title,category').eq('published',true).order('title').limit(300);if(error){document.getElementById('interventioncontent').textContent=error.message;return;}interventionPublished=data||[];renderPisaIntervention();
+}
+function renderPisaIntervention(){
+const root=document.getElementById('interventioncontent');root.replaceChildren();const id=document.getElementById('progressstudent')?.value;if(!id){root.textContent='Selecciona un alumno en la ficha individual.';return;}
+const all=studentProgressRecords.filter(x=>x.student_id===id),mapping=new Map(pisaProcessCatalog.map(x=>[x.question_id,x.process])),graded=all.filter(x=>x.score!=null&&['correct','partial','incorrect'].includes(x.status)&&mapping.get(x.question_id));
+const categories=[...new Set(all.map(x=>x.category))],processes=[['formular','Formular'],['emplear','Emplear'],['interpretar','Interpretar']];let valid=0,needs=0;
+for(const category of categories){for(const [process,label] of processes){const set=graded.filter(x=>x.category===category&&mapping.get(x.question_id)===process),taskCount=new Set(set.map(x=>x.assignment_id)).size;if(set.length<5||taskCount<2)continue;valid++;const avg=set.reduce((n,x)=>n+Number(x.score),0)/set.length;if(avg>=0.5)continue;needs++;
+const card=document.createElement('div');card.style.cssText='border:1px solid #e3d5d8;border-radius:12px;padding:15px;margin:12px 0';const heading=document.createElement('h3');heading.textContent=category+' · '+label+' · '+(avg*100).toFixed(1)+' %';card.append(heading);const detail=document.createElement('p');detail.textContent='Indicador de revisión: '+set.length+' respuestas corregidas de '+taskCount+' tareas. Revisa los procedimientos y las justificaciones del alumno antes de planificar el refuerzo.';card.append(detail);
+const suggestions=interventionPublished.filter(a=>a.category===category).slice(0,6);const sh=document.createElement('strong');sh.textContent='Actividades publicadas del mismo bloque:';card.append(sh);
+if(!suggestions.length){const p=document.createElement('p');p.textContent='No hay actividades publicadas de este bloque. Pendiente de ampliar el catálogo.';card.append(p);}else{const ul=document.createElement('ul');for(const a of suggestions){const li=document.createElement('li');li.textContent=a.title;ul.append(li);}card.append(ul);const caution=document.createElement('p');caution.style.fontSize='13px';caution.textContent='La coincidencia es por contenido, no por proceso PISA. Verifica la adecuación y la disponibilidad de la actividad antes de asignarla.';card.append(caution);}
+root.append(card);
+}}
+if(!needs){const p=document.createElement('p');p.textContent=valid?'No se detectan cruces por debajo del 50 % entre los que disponen de evidencia orientativa suficiente.':'Todavía no hay datos suficientes para proponer refuerzos individualizados por contenido y proceso.';root.append(p);}
+const note=document.createElement('p');note.style.cssText='font-size:13px;color:#5d6470';note.textContent='Estas orientaciones no son diagnósticos ni asignan tareas automáticamente. El docente decide qué actividades utilizar y cuándo.';root.append(note);
+}
+document.getElementById('refreshintervention').onclick=async()=>{await loadStudentProgress();await loadPisaProcesses();await loadPisaIntervention();};
+document.getElementById('progressstudent').addEventListener('change',renderPisaIntervention);
+const previousTalentDraw=drawPisaTalent;drawPisaTalent=function(){previousTalentDraw();renderPisaIntervention();};
+S.auth.onAuthStateChange(()=>setTimeout(loadPisaIntervention,0));setTimeout(loadPisaIntervention,1900);
 </script></html>
