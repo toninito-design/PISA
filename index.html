@@ -66,4 +66,8 @@ for(const x of data||[]){const row=document.createElement('div');row.className='
 }
 document.getElementById('refreshimport').onclick=loadImportProgress;
 S.auth.onAuthStateChange(()=>setTimeout(loadImportProgress,0));setTimeout(loadImportProgress,500);
+</script><section id="visualrepo" class="card hidden"><h2>Documentos visuales originales</h2><p>Consulta el repositorio visual de las actividades PISA. Los documentos son material de referencia: todavía no están vinculados automáticamente a cada pregunta.</p><p><a href="./repositorio.html" target="_blank" rel="noopener noreferrer">Abrir repositorio visual PISA (nueva pestaña)</a></p><button id="viewrepo">Mostrar repositorio dentro de la plataforma</button><div id="repoframewrap" class="hidden" style="margin-top:12px"><iframe title="Repositorio visual PISA" src="./repositorio.html" loading="lazy" style="width:100%;height:70vh;border:1px solid #ccd;border-radius:8px"></iframe></div></section><script>
+async function showVisualRepository(){const {data:{user}}=await S.auth.getUser();if(!user){document.getElementById('visualrepo').classList.add('hidden');return;}const {data:profile}=await S.from('profiles').select('role').eq('id',user.id).maybeSingle();document.getElementById('visualrepo').classList.toggle('hidden',profile?.role!=='teacher');}
+document.getElementById('viewrepo').onclick=()=>document.getElementById('repoframewrap').classList.toggle('hidden');
+S.auth.onAuthStateChange(()=>setTimeout(showVisualRepository,0));setTimeout(showVisualRepository,500);
 </script></html>
