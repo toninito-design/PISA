@@ -32,4 +32,28 @@ for(const [label,approve] of [['Aprobar docente',true],['Rechazar',false]]){cons
 document.getElementById('adminreload').onclick=adminLoad;
 adminClient.auth.onAuthStateChange(()=>setTimeout(adminLoad,0));
 setTimeout(adminLoad,350);
+</script><section id="activitypanel" class="card hidden"><h2>Banco de actividades PISA</h2><p id="catalogstate">Consultando actividades publicadas...</p><div id="cataloglist"></div><h2>Asignar actividad a una clase</h2><form id="assignactivity"><label>Clase</label><select id="assignclass" required style="display:block;width:100%;padding:12px;margin:8px 0"></select><label>Actividad</label><select id="assignitem" required style="display:block;width:100%;padding:12px;margin:8px 0"></select><label>Título de la tarea</label><input id="assigntitle" required placeholder="Ej. Actividad PISA de esta semana"><label>Intentos máximos</label><input id="assignattempts" type="number" min="1" max="20" value="1" required><button id="assignsubmit">Asignar a la clase</button></form><h2>Asignaciones creadas</h2><div id="assignmentlist"></div></section>
+<script>
+async function loadActivityPanel(){
+const {data:{user}}=await S.auth.getUser();if(!user){document.getElementById('activitypanel').classList.add('hidden');return;}
+const {data:prof}=await S.from('profiles').select('role').eq('id',user.id).maybeSingle();const isTeacher=prof?.role==='teacher';document.getElementById('activitypanel').classList.toggle('hidden',!isTeacher);if(!isTeacher)return;
+const [classes,activities,assignments]=await Promise.all([
+S.from('classrooms').select('id,name').eq('teacher_id',user.id).order('name'),
+S.from('activities').select('id,title,category,source_code').eq('published',true).order('title'),
+S.from('assignments').select('id,title,classroom_id,activity_id,created_at').order('created_at',{ascending:false})
+]);
+const state=document.getElementById('catalogstate'),catalog=document.getElementById('cataloglist');
+if(classes.error||activities.error||assignments.error){state.textContent='Error de consulta: '+(classes.error||activities.error||assignments.error).message;return;}
+const cls=classes.data||[],acts=activities.data||[];
+state.textContent=acts.length?acts.length+' actividades disponibles para asignar.':'El repositorio todavía no está importado. No hay actividades publicadas para asignar.';
+catalog.replaceChildren();
+for(const a of acts){const d=document.createElement('div');d.className='item';d.textContent=a.title+' · '+(a.category||'Sin categoría')+' · '+(a.source_code||'');catalog.append(d);}
+for(const [id,arr,label] of [['assignclass',cls,x=>x.name],['assignitem',acts,x=>x.title]]){const select=document.getElementById(id);select.replaceChildren();for(const x of arr){const opt=document.createElement('option');opt.value=x.id;opt.textContent=label(x);select.append(opt);}}
+document.getElementById('assignsubmit').disabled=!cls.length||!acts.length;
+const list=document.getElementById('assignmentlist');list.replaceChildren();const own=new Set(cls.map(x=>x.id));
+const rows=(assignments.data||[]).filter(x=>own.has(x.classroom_id));if(!rows.length)list.textContent='Todavía no hay tareas asignadas.';
+for(const a of rows){const d=document.createElement('div');d.className='item';d.textContent=a.title+' · '+(cls.find(x=>x.id===a.classroom_id)?.name||'Clase')+' · '+new Date(a.created_at).toLocaleDateString('es-ES');list.append(d);}
+}
+document.getElementById('assignactivity').onsubmit=async e=>{e.preventDefault();const data={classroom_id:document.getElementById('assignclass').value,activity_id:document.getElementById('assignitem').value,title:document.getElementById('assigntitle').value.trim(),max_attempts:Number(document.getElementById('assignattempts').value),feedback_mode:'after_submission'};if(!data.classroom_id||!data.activity_id)return alert('Selecciona clase y actividad.');const {error}=await S.from('assignments').insert(data);if(error)alert(error.message);else{alert('Actividad asignada a la clase.');await loadActivityPanel();}};
+S.auth.onAuthStateChange(()=>setTimeout(loadActivityPanel,0));setTimeout(loadActivityPanel,400);
 </script></html>
